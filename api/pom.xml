@@ -35,18 +35,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.jboss.marshalling</groupId>
-            <artifactId>jboss-marshalling-jdk9-supplement</artifactId>
-            <version>1.0.1.Final</version>
-            <scope>provided</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.jboss.marshalling</groupId>
-                    <artifactId>jboss-marshalling</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>org.jboss.modules</groupId>
             <artifactId>jboss-modules</artifactId>
             <scope>provided</scope>
@@ -74,22 +62,62 @@
         </resources>
 
         <plugins>
-            <!-- Remote resources -->
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.7.1-SNAPSHOT</version>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>compile-java8</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <release>8</release>
+                            <buildDirectory>${project.build.directory}</buildDirectory>
+                            <compileSourceRoots>${project.compileSourceRoots}</compileSourceRoots>
+                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                            <additionalCompilePathItems>
+                                <additionalCompilePathItem>${project.build.directory}/sun-misc.jar</additionalCompilePathItem>
+                            </additionalCompilePathItems>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>compile-java9</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <release>9</release>
+                            <buildDirectory>${project.build.directory}</buildDirectory>
+                            <compileSourceRoots>${project.basedir}/src/main/java9</compileSourceRoots>
+                            <outputDirectory>${project.build.directory}/classes/META-INF/versions/9</outputDirectory>
+                            <additionalCompilePathItems>
+                                <additionalCompilePathItem>${project.build.outputDirectory}</additionalCompilePathItem>
+                            </additionalCompilePathItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>add-java9-supplement</id>
-                        <phase>generate-resources</phase>
+                        <id>fetch-misc</id>
+                        <phase>generate-sources</phase>
                         <goals>
-                            <goal>unpack-dependencies</goal>
+                            <goal>get</goal>
+                            <goal>copy</goal>
                         </goals>
                         <configuration>
-                            <includeGroupIds>org.jboss.marshalling</includeGroupIds>
-                            <includeArtifactIds>jboss-marshalling-jdk9-supplement</includeArtifactIds>
-                            <excludeTransitive>true</excludeTransitive>
-                            <includes>**/*.class</includes>
-                            <outputDirectory>${project.build.directory}/generated-resources/META-INF/versions/9</outputDirectory>
+                            <artifact>org.jboss:sun-misc:1.Final-SNAPSHOT</artifact>
+                            <outputDirectory>${project.build.directory}</outputDirectory>
+                            <stripVersion>true</stripVersion>
                         </configuration>
                     </execution>
                 </executions>
