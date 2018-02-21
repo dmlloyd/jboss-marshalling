@@ -93,6 +93,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
     private SortedSet<Validator> validators;
     private int validatorSeq;
 
+    private static final Object UNRESOLVED = new Object();
     private static final Field proxyInvocationHandler;
 
     static {
@@ -238,7 +239,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     final int index = readInt();
                     try {
                         final Object obj = instanceCache.get(index);
-                        if (obj != null) return obj;
+                        if (obj != UNRESOLVED) return obj;
                     } catch (IndexOutOfBoundsException e) {
                     }
                     throw new InvalidObjectException("Attempt to read a backreference with an invalid ID (absolute " + index + ")");
@@ -250,7 +251,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     final int index = readByte() | 0xffffff00;
                     try {
                         final Object obj = instanceCache.get(index + instanceCache.size());
-                        if (obj != null) return obj;
+                        if (obj != UNRESOLVED) return obj;
                     } catch (IndexOutOfBoundsException e) {
                     }
                     throw new InvalidObjectException("Attempt to read a backreference with an invalid ID (relative near " + index + ")");
@@ -262,7 +263,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     final int index = readShort() | 0xffff0000;
                     try {
                         final Object obj = instanceCache.get(index + instanceCache.size());
-                        if (obj != null) return obj;
+                        if (obj != UNRESOLVED) return obj;
                     } catch (IndexOutOfBoundsException e) {
                     }
                     throw new InvalidObjectException("Attempt to read a backreference with an invalid ID (relative nearish " + index + ")");
@@ -313,7 +314,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     instanceCache.add(obj);
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -556,7 +557,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
 
                 case ID_UNMODIFIABLE_COLLECTION: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableCollection((Collection<?>) doReadNestedObject(false, "Collections#unmodifiableCollection()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -566,7 +567,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_SET: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableSet((Set<?>) doReadNestedObject(false, "Collections#unmodifiableSet()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -576,7 +577,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_LIST: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableList((List<?>) doReadNestedObject(false, "Collections#unmodifiableList()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -586,7 +587,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_MAP: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableMap((Map<?, ?>) doReadNestedObject(false, "Collections#unmodifiableMap()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -596,7 +597,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_SORTED_SET: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableSortedSet((SortedSet<?>) doReadNestedObject(false, "Collections#unmodifiableSortedSet()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -606,7 +607,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_SORTED_MAP: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.unmodifiableSortedMap((SortedMap<?, ?>) doReadNestedObject(false, "Collections#unmodifiableSortedMap()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -616,7 +617,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_UNMODIFIABLE_MAP_ENTRY_SET: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj;
                     try {
                         obj = Protocol.unmodifiableMapEntrySetCtor.newInstance(doReadNestedObject(false, "Collections#unmodifiableSortedMap:entrySet()"));
@@ -634,7 +635,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
 
                 case ID_SINGLETON_LIST_OBJECT: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.singletonList(doReadNestedObject(false, "Collections#singletonList()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -644,7 +645,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_SINGLETON_SET_OBJECT: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.singleton(doReadNestedObject(false, "Collections#singleton()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -654,7 +655,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_SINGLETON_MAP_OBJECT: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.singletonMap(doReadNestedObject(false, "Collections#singletonMap() [key]"), doReadNestedObject(false, "Collections#singletonMap() [value]"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -664,7 +665,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 }
                 case ID_REVERSE_ORDER2_OBJECT: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Collections.reverseOrder((Comparator<?>) doReadNestedObject(false, "Collections#reverseOrder()"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -739,7 +740,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                         }
                         case ID_CC_TREE_SET: {
                             int idx = instanceCache.size();
-                            instanceCache.add(null);
+                            instanceCache.add(UNRESOLVED);
                             Comparator comp = (Comparator)doReadNestedObject(false, "java.util.TreeSet comparator");
                             return replace(readSortedSetData(unshared, idx, len, new TreeSet(comp), discardMissing));
                         }
@@ -772,20 +773,20 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                         }
                         case ID_CC_TREE_MAP: {
                             int idx = instanceCache.size();
-                            instanceCache.add(null);
+                            instanceCache.add(UNRESOLVED);
                             Comparator comp = (Comparator)doReadNestedObject(false, "java.util.TreeSet comparator");
                             return replace(readSortedMapData(unshared, idx, len, new TreeMap(comp), discardMissing));
                         }
                         case ID_CC_ENUM_MAP: {
                             int idx = instanceCache.size();
-                            instanceCache.add(null);
+                            instanceCache.add(UNRESOLVED);
                             final ClassDescriptor nestedDescriptor = doReadClassDescriptor(readUnsignedByte(), true);
                             final Class<? extends Enum> elementType = nestedDescriptor.getType().asSubclass(Enum.class);
                             return replace(readMapData(unshared, idx, len, new EnumMap(elementType), discardMissing));
                         }
                         case ID_CC_NCOPIES: {
                             final int idx = instanceCache.size();
-                            instanceCache.add(null);
+                            instanceCache.add(UNRESOLVED);
                             final Object obj = Collections.nCopies(len, doReadNestedObject(false, "n-copies member object"));
                             final Object resolvedObject = objectResolver.readResolve(obj);
                             if (! unshared) {
@@ -801,7 +802,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
 
                 case ID_PAIR: {
                     final int idx = instanceCache.size();
-                    instanceCache.add(null);
+                    instanceCache.add(UNRESOLVED);
                     final Object obj = Pair.create(doReadNestedObject(unshared, "java.util.marshalling.Pair [A]"), doReadNestedObject(unshared, "java.util.marshalling.Pair [B]"));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (! unshared) {
@@ -853,7 +854,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             target.add(doReadCollectionObject(false, i, len, discardMissing));
         }
         final Object resolvedObject = objectResolver.readResolve(target);
-        instanceCache.set(idx, unshared ? null : resolvedObject);
+        instanceCache.set(idx, unshared ? UNRESOLVED : resolvedObject);
 
         return resolvedObject;
     }
@@ -877,7 +878,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
         }
         target.addAll(filler);
         final Object resolvedObject = objectResolver.readResolve(target);
-        instanceCache.set(idx, unshared ? null : resolvedObject);
+        instanceCache.set(idx, unshared ? UNRESOLVED : resolvedObject);
 
         return resolvedObject;
     }
@@ -899,7 +900,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             target.put(doReadMapObject(false, i, len, true, discardMissing), doReadMapObject(false, i, len, false, discardMissing));
         }
         final Object resolvedObject = objectResolver.readResolve(target);
-        instanceCache.set(idx, unshared ? null : resolvedObject);
+        instanceCache.set(idx, unshared ? UNRESOLVED : resolvedObject);
 
         return resolvedObject;
     }
@@ -924,7 +925,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
         // should install entries in order, bypassing any circular ref issues, unless the map is mutated during deserialize of one of its elements
         target.putAll(filler);
         final Object resolvedObject = objectResolver.readResolve(target);
-        instanceCache.set(idx, unshared ? null : resolvedObject);
+        instanceCache.set(idx, unshared ? UNRESOLVED : resolvedObject);
 
         return resolvedObject;
     }
@@ -1374,7 +1375,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     }
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -1390,7 +1391,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     doInitSerializable(obj, serializableClassDescriptor, discardMissing);
                     final Object resolvedObject = obj == null ? null : objectResolver.readResolve(serializableClass.hasReadResolve() ? serializableClass.callReadResolve(obj) : obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -1415,7 +1416,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     blockUnmarshaller.unblock();
                     final Object resolvedObject = objectResolver.readResolve(serializableClass.hasReadResolve() ? serializableClass.callReadResolve(obj) : obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -1435,7 +1436,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     blockUnmarshaller.unblock();
                     final Object resolvedObject = objectResolver.readResolve(serializableClass.hasReadResolve() ? serializableClass.callReadResolve(obj) : obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -1448,7 +1449,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     instanceCache.add(obj);
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (unshared) {
-                        instanceCache.set(idx, null);
+                        instanceCache.set(idx, UNRESOLVED);
                     } else if (obj != resolvedObject) {
                         instanceCache.set(idx, resolvedObject);
                     }
@@ -1461,7 +1462,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     // v1 string
                     final String obj = readString();
                     final Object resolvedObject = objectResolver.readResolve(obj);
-                    instanceCache.add(unshared ? null : resolvedObject);
+                    instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
                     return resolvedObject;
                 }
                 case ID_CLASS_CLASS: {
@@ -1547,7 +1548,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readDouble();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1557,7 +1558,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readFloat();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1567,7 +1568,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readChar();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1577,7 +1578,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readLong();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1587,7 +1588,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readInt();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1597,7 +1598,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             array[i] = readShort();
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1605,7 +1606,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
         final byte[] array = new byte[cnt];
         readFully(array, 0, array.length);
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1644,7 +1645,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             }
         }
         final Object resolvedObject = objectResolver.readResolve(array);
-        instanceCache.add(unshared ? null : resolvedObject);
+        instanceCache.add(unshared ? UNRESOLVED : resolvedObject);
         return resolvedObject;
     }
 
@@ -1657,7 +1658,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
         }
         final Object resolvedObject = objectResolver.readResolve(array);
         if (unshared) {
-            instanceCache.set(idx, null);
+            instanceCache.set(idx, UNRESOLVED);
         } else if (array != resolvedObject) {
             instanceCache.set(idx, resolvedObject);
         }
