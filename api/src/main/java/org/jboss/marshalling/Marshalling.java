@@ -18,6 +18,8 @@
 
 package org.jboss.marshalling;
 
+import static java.security.AccessController.doPrivileged;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,9 +29,6 @@ import java.io.StreamCorruptedException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedAction;
-import java.security.AccessController;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.ServiceLoader;
 
@@ -56,8 +55,12 @@ public final class Marshalling {
      * class path.
      */
     @Deprecated
-    public static MarshallerFactory getMarshallerFactory(String name) {
-        return loadMarshallerFactory(ServiceLoader.load(ProviderDescriptor.class), name);
+    public static MarshallerFactory getMarshallerFactory(final String name) {
+        return loadMarshallerFactory(doPrivileged(new PrivilegedAction<ServiceLoader<ProviderDescriptor>>() {
+            public ServiceLoader<ProviderDescriptor> run() {
+                return ServiceLoader.load(ProviderDescriptor.class);
+            }
+        }), name);
     }
 
     /**
@@ -70,8 +73,12 @@ public final class Marshalling {
      *
      * @see ServiceLoader
      */
-    public static MarshallerFactory getMarshallerFactory(String name, ClassLoader classLoader) {
-        return loadMarshallerFactory(ServiceLoader.load(ProviderDescriptor.class, classLoader), name);
+    public static MarshallerFactory getMarshallerFactory(final String name, final ClassLoader classLoader) {
+        return loadMarshallerFactory(doPrivileged(new PrivilegedAction<ServiceLoader<ProviderDescriptor>>() {
+            public ServiceLoader<ProviderDescriptor> run() {
+                return ServiceLoader.load(ProviderDescriptor.class, classLoader);
+            }
+        }), name);
     }
 
     /**
@@ -80,8 +87,12 @@ public final class Marshalling {
      * @param name the name of the protocol to acquire
      * @return the marshaller factory, or {@code null} if no matching factory was found
      */
-    public static MarshallerFactory getProvidedMarshallerFactory(String name) {
-        return loadMarshallerFactory(ServiceLoader.load(ProviderDescriptor.class, Marshalling.class.getClassLoader()), name);
+    public static MarshallerFactory getProvidedMarshallerFactory(final String name) {
+        return loadMarshallerFactory(doPrivileged(new PrivilegedAction<ServiceLoader<ProviderDescriptor>>() {
+            public ServiceLoader<ProviderDescriptor> run() {
+                return ServiceLoader.load(ProviderDescriptor.class, Marshalling.class.getClassLoader());
+            }
+        }), name);
     }
 
     private static MarshallerFactory loadMarshallerFactory(ServiceLoader<ProviderDescriptor> loader, String name) {
@@ -339,13 +350,7 @@ public final class Marshalling {
      * @return a new OptionalDataException
      */
     public static OptionalDataException createOptionalDataException(boolean eof) {
-        final OptionalDataException optionalDataException = createOptionalDataException();
-        final StackTraceElement[] stackTrace = new Throwable().getStackTrace();
-        final StackTraceElement[] copyStackTrace = new StackTraceElement[stackTrace.length - 1];
-        System.arraycopy(stackTrace, 1, copyStackTrace, 0, copyStackTrace.length);
-        optionalDataException.setStackTrace(copyStackTrace);
-        optionalDataException.eof = eof;
-        return optionalDataException;
+        return JDKSpecific.createOptionalDataException(eof);
     }
 
     /**
@@ -356,45 +361,6 @@ public final class Marshalling {
      * @return a new OptionalDataException
      */
     public static OptionalDataException createOptionalDataException(int length) {
-        final OptionalDataException optionalDataException = createOptionalDataException();
-        optionalDataException.length = length;
-        return optionalDataException;
-    }
-
-    private static OptionalDataException createOptionalDataException() {
-        return AccessController.doPrivileged(OPTIONAL_DATA_EXCEPTION_CREATE_ACTION);
-    }
-
-    private static final OptionalDataExceptionCreateAction OPTIONAL_DATA_EXCEPTION_CREATE_ACTION = new OptionalDataExceptionCreateAction();
-
-    private static final class OptionalDataExceptionCreateAction implements PrivilegedAction<OptionalDataException> {
-
-        private final Constructor<OptionalDataException> constructor;
-
-        private OptionalDataExceptionCreateAction() {
-            constructor = AccessController.doPrivileged(new PrivilegedAction<Constructor<OptionalDataException>>() {
-                public Constructor<OptionalDataException> run() {
-                    try {
-                        final Constructor<OptionalDataException> constructor = OptionalDataException.class.getDeclaredConstructor(boolean.class);
-                        constructor.setAccessible(true);
-                        return constructor;
-                    } catch (NoSuchMethodException e) {
-                        throw new NoSuchMethodError(e.getMessage());
-                    }
-                }
-            });
-        }
-
-        public OptionalDataException run() {
-            try {
-                return constructor.newInstance(Boolean.FALSE);
-            } catch (InstantiationException e) {
-                throw new InstantiationError(e.getMessage());
-            } catch (IllegalAccessException e) {
-                throw new IllegalAccessError(e.getMessage());
-            } catch (InvocationTargetException e) {
-                throw new RuntimeException("Error invoking constructor", e);
-            }
-        }
+        return JDKSpecific.createOptionalDataException(length);
     }
 }

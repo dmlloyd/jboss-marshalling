@@ -27,9 +27,9 @@ import java.io.ObjectInputValidation;
 import java.io.StreamCorruptedException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayDeque;
@@ -70,11 +70,14 @@ import org.jboss.marshalling.MarshallingConfiguration;
 import org.jboss.marshalling.Pair;
 import org.jboss.marshalling.UTFUtils;
 import org.jboss.marshalling.TraceInformation;
+import org.jboss.marshalling._private.GetDeclaredFieldAction;
+import org.jboss.marshalling._private.GetUnsafeAction;
 import org.jboss.marshalling.reflect.SerializableClass;
 import org.jboss.marshalling.reflect.SerializableClassRegistry;
 import org.jboss.marshalling.reflect.SerializableField;
 import org.jboss.marshalling.util.FlatNavigableMap;
 import org.jboss.marshalling.util.FlatNavigableSet;
+import sun.misc.Unsafe;
 
 import static org.jboss.marshalling.river.Protocol.*;
 
@@ -94,20 +97,13 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
     private int validatorSeq;
 
     private static final Object UNRESOLVED = new Object();
+    private static final Unsafe unsafe = AccessController.doPrivileged(GetUnsafeAction.INSTANCE);
     private static final Field proxyInvocationHandler;
+    private static final long proxyInvocationHandlerOffset;
 
     static {
-        proxyInvocationHandler = AccessController.doPrivileged(new PrivilegedAction<Field>() {
-            public Field run() {
-                try {
-                    final Field field = Proxy.class.getDeclaredField("h");
-                    field.setAccessible(true);
-                    return field;
-                } catch (NoSuchFieldException e) {
-                    throw new NoSuchFieldError(e.getMessage());
-                }
-            }
-        });
+        proxyInvocationHandler = AccessController.doPrivileged(new GetDeclaredFieldAction(Proxy.class, "h"));
+        proxyInvocationHandlerOffset = unsafe.objectFieldOffset(proxyInvocationHandler);
     }
 
     protected RiverUnmarshaller(final RiverMarshallerFactory marshallerFactory, final SerializableClassRegistry registry, final MarshallingConfiguration configuration) {
@@ -1019,7 +1015,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
             case ID_SERIALIZABLE_CLASS: {
                 int idx = classCache.size();
                 classCache.add(null);
-                final String className = readString();
+                final String className = configuredVersion >= 4 ? readObject(String.class) : readString();
                 final long uid = readLong();
                 Class<?> clazz = null;
                 try {
@@ -1034,7 +1030,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 final ClassDescriptor[] descriptors = new ClassDescriptor[cnt];
                 final boolean[] unshareds = new boolean[cnt];
                 for (int i = 0; i < cnt; i ++) {
-                    names[i] = readUTF();
+                    names[i] = configuredVersion >= 4 ? readObject(String.class) : readUTF();
                     descriptors[i] = doReadClassDescriptor(readUnsignedByte(), true);
                     unshareds[i] = readBoolean();
                 }
@@ -1368,11 +1364,8 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     final Object obj = registry.lookup(type).callNonInitConstructor(nonSerializableSuperclass);
                     final int idx = instanceCache.size();
                     instanceCache.add(obj);
-                    try {
-                        proxyInvocationHandler.set(obj, doReadNestedObject(unshared, "[proxy invocation handler]"));
-                    } catch (IllegalAccessException e) {
-                        throw new InvalidClassException(type.getName(), "Unable to set proxy invocation handler");
-                    }
+                    // force a cast for safety
+                    unsafe.putObject(obj, proxyInvocationHandlerOffset, InvocationHandler.class.cast(doReadNestedObject(unshared, "[proxy invocation handler]")));
                     final Object resolvedObject = objectResolver.readResolve(obj);
                     if (unshared) {
                         instanceCache.set(idx, UNRESOLVED);
@@ -1385,7 +1378,14 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 case ID_SERIALIZABLE_CLASS: {
                     final SerializableClassDescriptor serializableClassDescriptor = (SerializableClassDescriptor) descriptor;
                     final SerializableClass serializableClass = serializableClassDescriptor.getSerializableClass();
-                    final Object obj = serializableClass == null ? null : serializableClass.callNonInitConstructor(serializableClassDescriptor.getNonSerializableSuperclass());
+                    final Object obj;
+                    if(serializableClass == null) {
+                        obj = null;
+                    } else if (!serializableClass.hasNoInitConstructor(serializableClassDescriptor.getNonSerializableSuperclass())) {
+                        throw new NotSerializableException(serializableClass.getSubjectClass().getName());
+                    } else {
+                        obj = serializableClass.callNonInitConstructor(serializableClassDescriptor.getNonSerializableSuperclass());
+                    }
                     final int idx = instanceCache.size();
                     instanceCache.add(obj);
                     doInitSerializable(obj, serializableClassDescriptor, discardMissing);
@@ -1650,7 +1650,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
     }
 
     private Object doReadObjectArray(final int cnt, final Class<?> type, final boolean unshared, final boolean discardMissing) throws ClassNotFoundException, IOException {
-        final Object[] array = (Object[]) Array.newInstance(type, cnt);
+        final Object[] array = (Object[]) replace(Array.newInstance(type, cnt));
         final int idx = instanceCache.size();
         instanceCache.add(array);
         for (int i = 0; i < cnt; i ++) {
@@ -1775,8 +1775,7 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
     protected void readFields(final Object obj, final SerializableClassDescriptor descriptor, final boolean discardMissing) throws IOException, ClassNotFoundException {
         for (SerializableField serializableField : descriptor.getFields()) {
             try {
-                final Field field = serializableField.getField();
-                if (field == null) {
+                if (! serializableField.isAccessible()) {
                     // missing; consume stream data only
                     switch (serializableField.getKind()) {
                         case BOOLEAN: {
@@ -1816,58 +1815,49 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                             break;
                         }
                     }
-                } else try {
+                } else {
                     switch (serializableField.getKind()) {
                         case BOOLEAN: {
-                            field.setBoolean(obj, readBoolean());
+                            serializableField.setBoolean(obj, readBoolean());
                             break;
                         }
                         case BYTE: {
-                            field.setByte(obj, readByte());
+                            serializableField.setByte(obj, readByte());
                             break;
                         }
                         case CHAR: {
-                            field.setChar(obj, readChar());
+                            serializableField.setChar(obj, readChar());
                             break;
                         }
                         case DOUBLE: {
-                            field.setDouble(obj, readDouble());
+                            serializableField.setDouble(obj, readDouble());
                             break;
                         }
                         case FLOAT: {
-                            field.setFloat(obj, readFloat());
+                            serializableField.setFloat(obj, readFloat());
                             break;
                         }
                         case INT: {
-                            field.setInt(obj, readInt());
+                            serializableField.setInt(obj, readInt());
                             break;
                         }
                         case LONG: {
-                            field.setLong(obj, readLong());
+                            serializableField.setLong(obj, readLong());
                             break;
                         }
                         case OBJECT: {
-                            field.set(obj, doReadObject(serializableField.isUnshared(), discardMissing));
+                            serializableField.setObject(obj, doReadObject(serializableField.isUnshared(), discardMissing));
                             break;
                         }
                         case SHORT: {
-                            field.setShort(obj, readShort());
+                            serializableField.setShort(obj, readShort());
                             break;
                         }
                     }
-                } catch (IllegalAccessException e) {
-                    final InvalidObjectException ioe = new InvalidObjectException("Unable to set a field");
-                    ioe.initCause(e);
-                    throw ioe;
                 }
-            } catch (IOException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
-                throw e;
-            } catch (ClassNotFoundException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
-                throw e;
-            } catch (RuntimeException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
+            } catch (IOException | ClassNotFoundException | RuntimeException e) {
+                TraceInformation.addFieldInformation(e, descriptor.getSerializableClass(), serializableField);
+                TraceInformation.addObjectInformation(e, obj);
                 throw e;
             }
         }
@@ -1915,13 +1905,13 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                     }
                 }
             } catch (IOException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
+                TraceInformation.addFieldInformation(e, descriptor.getSerializableClass(), serializableField);
                 throw e;
             } catch (ClassNotFoundException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
+                TraceInformation.addFieldInformation(e, descriptor.getSerializableClass(), serializableField);
                 throw new IOException("Failed to discard field data", e);
             } catch (RuntimeException e) {
-                TraceInformation.addFieldInformation(e, serializableField.getName());
+                TraceInformation.addFieldInformation(e, descriptor.getSerializableClass(), serializableField);
                 throw e;
             }
         }
