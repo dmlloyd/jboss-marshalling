@@ -1023,6 +1023,9 @@ public class RiverUnmarshaller extends AbstractUnmarshaller {
                 } catch (ClassNotFoundException cnfe) {
                     if (required) throw cnfe;
                 }
+                if (! serializabilityChecker.isSerializable(clazz) && required) {
+                    throw new ClassNotFoundException(className);
+                }
                 final FutureSerializableClassDescriptor descriptor = new FutureSerializableClassDescriptor(clazz, classType);
                 classCache.set(idx, descriptor);
                 final int cnt = readInt();

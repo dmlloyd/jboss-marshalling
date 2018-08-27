@@ -57,7 +57,7 @@ abstract class SerializableClassDescriptor extends ClassDescriptor {
         if (descriptor instanceof SerializableClassDescriptor) {
             return ((SerializableClassDescriptor) descriptor).getNonSerializableSuperclass();
         } else {
-            return descriptor.getType();
+            return descriptor.getNearestType();
         }
     }
 }
